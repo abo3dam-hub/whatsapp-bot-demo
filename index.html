@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>عيادة النور للتجميل — حجز واتساب</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0b141a; display: flex; justify-content: center; padding: 20px; color: #e9edef; min-height: 100vh; }
+  .phone { width: 400px; max-width: 100%; height: 92vh; min-height: 560px; background: #0b141a; border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 0 40px rgba(0,0,0,.6); border: 1px solid #2a3942; }
+  .header { background: #1f2c34; padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg,#00a884,#008069); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .header .name { font-weight: 600; } .header .status { font-size: 12px; color: #8696a0; }
+  .badge { background: #00a884; color: #06281f; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; margin-right: auto; white-space: nowrap; }
+  .chat { flex: 1; overflow-y: auto; padding: 16px 12px; background: #0b141a; background-image: radial-gradient(#111b21 1px, transparent 1px); background-size: 22px 22px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 85%; padding: 8px 12px; border-radius: 10px; font-size: 14.5px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.bot { background: #1f2c34; align-self: flex-start; border-top-right-radius: 0; }
+  .msg.me { background: #005c4b; align-self: flex-end; border-top-left-radius: 0; }
+  .time { font-size: 10px; color: #8696a0; text-align: left; margin-top: 4px; }
+  .typing { display: flex; gap: 4px; padding: 12px 14px; background: #1f2c34; border-radius: 10px; border-top-right-radius: 0; align-self: flex-start; }
+  .typing span { width: 7px; height: 7px; border-radius: 50%; background: #8696a0; animation: blink 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+  .inputbar { background: #1f2c34; padding: 10px; display: flex; gap: 8px; }
+  .inputbar input { flex: 1; background: #2a3942; border: none; border-radius: 20px; padding: 10px 16px; color: #e9edef; font-size: 15px; outline: none; }
+  .inputbar button { background: #00a884; border: none; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; font-size: 18px; flex-shrink: 0; }
+  .hint { text-align: center; color: #8696a0; font-size: 12px; padding: 8px; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="header">
+    <div class="avatar">💆</div>
+    <div><div class="name">عيادة النور للتجميل</div><div class="status">متصل الآن</div></div>
+    <div class="badge">رد فوري 🤖</div>
+  </div>
+  <div class="chat" id="chat"></div>
+  <div class="hint">جرّب: ابعت «مرحبا» ثم اتبع الخطوات بالارقام</div>
+  <div class="inputbar">
+    <input id="input" type="text" placeholder="اكتب رسالة..." autocomplete="off">
+    <button id="send" aria-label="إرسال">➤</button>
+  </div>
+</div>
+<script>
+// ── clinic config (demo) ──
+const cfg = {
+  clinicName: 'عيادة النور للتجميل',
+  currency: 'درهم',
+  staffPhone: '+971501234567',
+  services: [
+    { id: '1', name: 'تنظيف بشرة عميق', price: 250, durationMinutes: 45 },
+    { id: '2', name: 'جلسة ليزر', price: 400, durationMinutes: 30 },
+    { id: '3', name: 'بوتوكس', price: 900, durationMinutes: 30 },
+    { id: '4', name: 'فيلر', price: 1200, durationMinutes: 45 },
+    { id: '5', name: 'استشارة تجميلية', price: 100, durationMinutes: 20 },
+  ],
+  workingHours: { start: '09:00', end: '21:00', slotMinutes: 30, offDays: [5] },
+  messages: {
+    welcome: 'أهلاً وسهلاً بك في {clinicName} 🌸\nكيف بقدر ساعدك اليوم؟\n\n1️⃣ حجز موعد\n2️⃣ خدماتنا وأسعارنا\n3️⃣ التحدث مع موظف الاستقبال',
+    askService: 'ممتاز! اختار الخدمة بالرقم:',
+    askDay: 'اختار اليوم بالرقم:',
+    askTime: 'الأوقات المتاحة ليوم {day}:',
+    confirmTitle: 'تأكيد الحجز 📋',
+    confirmed: 'تم حجز موعدك بنجاح ✅\n\n📌 الخدمة: {service}\n📅 اليوم: {day}\n⏰ الوقت: {time}\n\nرح توصلك رسالة تذكير قبل الموعد بيوم.\nنتشرف بخدمتك! 🌸',
+    cancelled: 'تم إلغاء العملية. ابعت «القائمة» للرجوع للبداية.',
+    unknown: 'عذراً، ما فهمت عليك 😅\nاختار رقم من القائمة أو ابعت «القائمة» للرجوع للبداية.',
+    noSlots: 'عذراً، ما في مواعيد متاحة بهاليوم. اختار يوم تاني:',
+    toStaff: 'تمام 👍 فريق الاستقبال رح يتواصل معك بأقرب وقت على هالرقم.\nللحالات المستعجلة: {staffPhone}',
+  }
+};
+
+// ── helpers ──
+const AR_DAYS = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const AR_MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+const fill = (tpl, vars) => Object.entries(vars).reduce((s,[k,v]) => s.replaceAll('{'+k+'}', v), tpl);
+const norm = t => (t||'').trim();
+
+function nextDays(count = 7) {
+  const days = [];
+  const d = new Date();
+  while (days.length < count) {
+    d.setDate(d.getDate() + 1);
+    if (cfg.workingHours.offDays.includes(d.getDay())) continue;
+    const iso = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    days.push({ iso, label: AR_DAYS[d.getDay()] + ' ' + d.getDate() + ' ' + AR_MONTHS[d.getMonth()] });
+  }
+  return days;
+}
+
+function slotsFor(dateISO) {
+  const [sh, sm] = cfg.workingHours.start.split(':').map(Number);
+  const [eh] = cfg.workingHours.end.split(':').map(Number);
+  const step = cfg.workingHours.slotMinutes;
+  const slots = [];
+  const now = new Date();
+  const todayISO = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+  const isToday = dateISO === todayISO;
+  for (let h = sh; h < eh; h++) {
+    for (let m = (h === sh ? sm : 0); m < 60; m += step) {
+      const t = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      if (isToday) {
+        const slotDate = new Date(dateISO + 'T' + t + ':00');
+        if (slotDate <= new Date(now.getTime() + 60*60*1000)) continue;
+      }
+      slots.push(t);
+    }
+  }
+  return slots;
+}
+
+// ── conversation state machine ──
+let state = { step: 'MENU', data: {} };
+function reset() { state = { step: 'MENU', data: {} }; }
+
+function handleMessage(rawText) {
+  const text = norm(rawText);
+  const M = cfg.messages;
+  if (/^(القائمة|القائمه|menu|0)$/i.test(text)) { reset(); return fill(M.welcome, { clinicName: cfg.clinicName }); }
+  if (/^(إلغاء|الغاء|cancel)$/i.test(text)) { reset(); return M.cancelled; }
+
+  switch (state.step) {
+    case 'MENU': {
+      if (text === '1') {
+        state.step = 'SERVICE';
+        const list = cfg.services.map(sv => sv.id + '️⃣ ' + sv.name + ' — ' + sv.price + ' ' + cfg.currency).join('\n');
+        return M.askService + '\n\n' + list;
+      }
+      if (text === '2') {
+        const list = cfg.services.map(sv => '💆 ' + sv.name + '\n   💰 ' + sv.price + ' ' + cfg.currency + ' — ⏱ ' + sv.durationMinutes + ' دقيقة').join('\n\n');
+        return 'خدمات ' + cfg.clinicName + ':\n\n' + list + '\n\nللحجز ابعت الرقم 1️⃣';
+      }
+      if (text === '3') return fill(M.toStaff, { staffPhone: cfg.staffPhone });
+      return fill(M.welcome, { clinicName: cfg.clinicName });
+    }
+    case 'SERVICE': {
+      const svc = cfg.services.find(x => x.id === text);
+      if (!svc) return M.unknown;
+      state.data.service = svc;
+      state.step = 'DAY';
+      state.data.days = nextDays();
+      const list = state.data.days.map((d, i) => (i+1) + '️⃣ ' + d.label).join('\n');
+      return M.askDay + '\n\n' + list;
+    }
+    case 'DAY': {
+      const day = (state.data.days || [])[parseInt(text, 10) - 1];
+      if (!day) return M.unknown;
+      state.data.day = day;
+      state.step = 'TIME';
+      const slots = slotsFor(day.iso);
+      if (!slots.length) return M.noSlots;
+      state.data.slots = slots;
+      return fill(M.askTime, { day: day.label }) + '\n\n' + slots.map((t, j) => (j+1) + '️⃣ ' + t).join('\n');
+    }
+    case 'TIME': {
+      const time = (state.data.slots || [])[parseInt(text, 10) - 1];
+      if (!time) return M.unknown;
+      state.data.time = time;
+      state.step = 'CONFIRM';
+      const { service, day } = state.data;
+      return M.confirmTitle + '\n📌 الخدمة: ' + service.name + '\n📅 اليوم: ' + day.label + '\n⏰ الوقت: ' + time + '\n💰 السعر: ' + service.price + ' ' + cfg.currency + '\n\n1️⃣ تأكيد ✅\n2️⃣ إلغاء ❌';
+    }
+    case 'CONFIRM': {
+      if (text === '1') {
+        const { service, day, time } = state.data;
+        const msg = fill(M.confirmed, { day: day.label, service: service.name, time });
+        reset();
+        return msg;
+      }
+      reset();
+      return M.cancelled;
+    }
+    default:
+      reset();
+      return fill(M.welcome, { clinicName: cfg.clinicName });
+  }
+}
+
+// ── chat UI ──
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+function now() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+function addMsg(text, me) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + (me ? 'me' : 'bot');
+  div.innerHTML = text.replace(/</g,'&lt;') + '<div class="time">' + now() + '</div>';
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+function botReply(text) {
+  const typing = document.createElement('div');
+  typing.className = 'typing';
+  typing.innerHTML = '<span></span><span></span><span></span>';
+  chat.appendChild(typing);
+  chat.scrollTop = chat.scrollHeight;
+  setTimeout(() => {
+    typing.remove();
+    addMsg(text, false);
+  }, 700 + Math.random() * 600);
+}
+function send() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addMsg(text, true);
+  const reply = handleMessage(text);
+  if (reply) botReply(reply);
+}
+document.getElementById('send').addEventListener('click', send);
+input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+
+// opening message
+setTimeout(() => botReply(fill(cfg.messages.welcome, { clinicName: cfg.clinicName })), 600);
+</script>
+</body>
+</html>
